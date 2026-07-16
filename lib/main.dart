@@ -30,7 +30,7 @@ void main() {
 class MyEncryptor {
   // Key không còn cố định nữa mà sẽ được sinh ra từ PIN
   static encrypt.Key? _key; 
-  static final _iv = encrypt.IV.fromLength(16);
+  static final _iv = encrypt.IV(Uint8List(16));
 
   // Hàm thiết lập PIN: Băm PIN thành Key 32-byte (256-bit)
   static void setPin(String pin) {
@@ -46,6 +46,7 @@ class MyEncryptor {
 
   static Uint8List encryptData(List<int> bytes) {
     if (_key == null) throw Exception('Chưa nhập mã PIN bảo mật!');
+    print("MÃ HÓA: Key (Base64) = \${_key!.base64}, IV (Base64) = \${_iv.base64}");
     final encrypter = encrypt.Encrypter(encrypt.AES(_key!));
     final encrypted = encrypter.encryptBytes(bytes, iv: _iv);
     return encrypted.bytes;
@@ -53,6 +54,7 @@ class MyEncryptor {
 
   static List<int> decryptData(List<int> bytes) {
     if (_key == null) throw Exception('Chưa nhập mã PIN bảo mật!');
+    print("GIẢI MÃ: Key (Base64) = \${_key!.base64}, IV (Base64) = \${_iv.base64}");
     final encrypter = encrypt.Encrypter(encrypt.AES(_key!));
     final encrypted = encrypt.Encrypted(Uint8List.fromList(bytes));
     return encrypter.decryptBytes(encrypted, iv: _iv);
