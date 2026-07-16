@@ -153,9 +153,8 @@ class _CustomChangePasswordScreenState extends State<CustomChangePasswordScreen>
     });
 
     try {
-      // Gọi hàm của Amplify để xác nhận mật khẩu mới
-      await widget.state.confirmSignInNewPassword(pass);
-      // Nếu thành công, Authenticator sẽ tự chuyển sang bước tiếp theo (Authenticated)
+      // Gọi hàm của Amplify để xác nhận mật khẩu mới trực tiếp qua Auth API
+      await Amplify.Auth.confirmSignIn(confirmationValue: pass);
     } on Exception catch (e) {
       setState(() {
         _error = "Lỗi: ${e.toString()}";
