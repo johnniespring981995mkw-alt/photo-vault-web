@@ -408,7 +408,9 @@ class _SecureGalleryScreenState extends State<SecureGalleryScreen> {
 
       // 1. Mã hóa & Upload Full (Sử dụng key từ PIN và lưu trữ trực tiếp bằng Bytes)
       final originalBytes = await image.readAsBytes();
+      print("UPLOADING: originalBytes = ${originalBytes.length} bytes");
       final encryptedFullBytes = MyEncryptor.encryptData(originalBytes);
+      print("UPLOADING: encryptedFullBytes = ${encryptedFullBytes.length} bytes");
       
       await Amplify.Storage.uploadData(
         data: StorageDataPayload.bytes(encryptedFullBytes),
@@ -424,9 +426,31 @@ class _SecureGalleryScreenState extends State<SecureGalleryScreen> {
       } else {
         compressedBytes = originalBytes;
       }
+      print("UPLOADING: compressedBytes = ${compressedBytes.length} bytes");
       
       final encryptedThumbBytes = MyEncryptor.encryptData(compressedBytes);
+      print("UPLOADING: encryptedThumbBytes = ${encryptedThumbBytes.length} bytes");
 
+      // TEST GIẢI MÃ THỬ TRONG BỘ NHỚ NGAY LẬP TỨC
+      try {
+        final testDecrypted = MyEncryptor.decryptData(encryptedThumbBytes);
+        print("TEST TRONG BỘ NHỚ: Giải mã thành công, độ dài = ${testDecrypted.length} bytes");
+        bool isMatch = true;
+        if (compressedBytes.length != testDecrypted.length) {
+          isMatch = false;
+        } else {
+          for (int i = 0; i < compressedBytes.length; i++) {
+            if (compressedBytes[i] != testDecrypted[i]) {
+              isMatch = false;
+              break;
+            }
+          }
+        }
+        print("TEST TRONG BỘ NHỚ: Kết quả khớp hoàn toàn = $isMatch");
+      } catch (testError) {
+        print("TEST TRONG BỘ NHỚ: Thất bại với lỗi = $testError");
+      }
+      
       await Amplify.Storage.uploadData(
         data: StorageDataPayload.bytes(encryptedThumbBytes),
         path: StoragePath.fromString('thumb/$_userId/$fileName'),
