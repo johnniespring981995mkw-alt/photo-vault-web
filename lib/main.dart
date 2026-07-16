@@ -47,7 +47,8 @@ class MyEncryptor {
   static Uint8List encryptData(List<int> bytes) {
     if (_key == null) throw Exception('Chưa nhập mã PIN bảo mật!');
     print("MÃ HÓA: Key (Base64) = ${_key!.base64}, IV (Base64) = ${_iv.base64}");
-    final encrypter = encrypt.Encrypter(encrypt.AES(_key!));
+    // Tắt padding (padding: null) vì chế độ SIC (CTR) là stream cipher không cần padding, giúp tránh lỗi trên trình duyệt Web.
+    final encrypter = encrypt.Encrypter(encrypt.AES(_key!, mode: encrypt.AESMode.sic, padding: null));
     final encrypted = encrypter.encryptBytes(bytes, iv: _iv);
     return encrypted.bytes;
   }
@@ -55,7 +56,8 @@ class MyEncryptor {
   static List<int> decryptData(List<int> bytes) {
     if (_key == null) throw Exception('Chưa nhập mã PIN bảo mật!');
     print("GIẢI MÃ: Key (Base64) = ${_key!.base64}, IV (Base64) = ${_iv.base64}");
-    final encrypter = encrypt.Encrypter(encrypt.AES(_key!));
+    // Tắt padding (padding: null) khi giải mã giúp bỏ qua việc kiểm tra khối pad PKCS7 (tránh ném ngoại lệ Invalid pad block).
+    final encrypter = encrypt.Encrypter(encrypt.AES(_key!, mode: encrypt.AESMode.sic, padding: null));
     final encrypted = encrypt.Encrypted(Uint8List.fromList(bytes));
     return encrypter.decryptBytes(encrypted, iv: _iv);
   }
