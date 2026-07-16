@@ -83,7 +83,7 @@ class _MyAppState extends State<MyApp> {
       await Amplify.configure(amplifyConfig);
       setState(() => _isAmplifyConfigured = true);
     } on Exception catch (e) {
-      safePrint('Lỗi cấu hình: $e');
+      print('Lỗi cấu hình: $e');
     }
   }
 
@@ -363,7 +363,7 @@ class _SecureGalleryScreenState extends State<SecureGalleryScreen> {
       _userId = session.identityIdResult.value;
       if (mounted) _fetchFiles();
     } catch (e) {
-      safePrint('Lỗi Auth: $e');
+      print('Lỗi Auth: $e');
     }
   }
 
@@ -433,7 +433,7 @@ class _SecureGalleryScreenState extends State<SecureGalleryScreen> {
       );
       _fetchFiles();
     } catch (e) {
-      safePrint('Lỗi upload: $e');
+      print('Lỗi upload: $e');
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
     }
   }
@@ -522,12 +522,14 @@ class _EncryptedThumbnailState extends State<EncryptedThumbnail> {
       ).result;
 
       final encryptedBytes = result.bytes;
+      print("Đã tải: ${widget.storagePath}, độ dài: ${encryptedBytes.length} bytes");
       // Giải mã bằng Key từ PIN hiện tại
       final decryptedData = MyEncryptor.decryptData(encryptedBytes);
+      print("Giải mã xong: ${widget.storagePath}, độ dài: ${decryptedData.length} bytes");
       if (mounted) setState(() => _imageBytes = Uint8List.fromList(decryptedData));
     } catch (e) {
       // Nếu PIN sai, giải mã sẽ thất bại và không hiện ảnh
-      safePrint("Giải mã thumbnail thất bại: $e");
+      print("Giải mã thumbnail thất bại (${widget.storagePath}): $e");
     }
   }
 
@@ -568,8 +570,10 @@ class _DecryptViewerScreenState extends State<DecryptViewerScreen> {
       ).result;
 
       final encryptedBytes = result.bytes;
+      print("Đã tải ảnh gốc: ${widget.fullPath}, độ dài: ${encryptedBytes.length} bytes");
       // Giải mã bằng Key từ PIN
       final decryptedData = MyEncryptor.decryptData(encryptedBytes);
+      print("Giải mã ảnh gốc xong: ${widget.fullPath}, độ dài: ${decryptedData.length} bytes");
 
       if (mounted) {
         setState(() {
@@ -578,10 +582,11 @@ class _DecryptViewerScreenState extends State<DecryptViewerScreen> {
         });
       }
     } catch (e) {
+      print("Giải mã ảnh gốc thất bại (${widget.fullPath}): $e");
       if (mounted) {
         setState(() {
           _loading = false;
-          _error = "Không thể giải mã! Có thể bạn đã nhập sai mã PIN so với lúc upload.";
+          _error = "Không thể giải mã! Có thể bạn đã nhập sai mã PIN so với lúc upload. Chi tiết: $e";
         });
       }
     }
