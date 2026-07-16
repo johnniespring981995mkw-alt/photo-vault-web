@@ -47,8 +47,8 @@ class MyEncryptor {
   static Uint8List encryptData(List<int> bytes) {
     if (_key == null) throw Exception('Chưa nhập mã PIN bảo mật!');
     print("MÃ HÓA: Key (Base64) = ${_key!.base64}, IV (Base64) = ${_iv.base64}");
-    // Tắt padding (padding: null) vì chế độ SIC (CTR) là stream cipher không cần padding, giúp tránh lỗi trên trình duyệt Web.
-    final encrypter = encrypt.Encrypter(encrypt.AES(_key!, mode: encrypt.AESMode.sic, padding: null));
+    // Sử dụng PKCS7 padding làm mặc định để tương thích hoàn toàn hai chiều với Mobile
+    final encrypter = encrypt.Encrypter(encrypt.AES(_key!, mode: encrypt.AESMode.sic, padding: 'PKCS7'));
     final encrypted = encrypter.encryptBytes(bytes, iv: _iv);
     return encrypted.bytes;
   }
@@ -56,7 +56,18 @@ class MyEncryptor {
   static List<int> decryptData(List<int> bytes) {
     if (_key == null) throw Exception('Chưa nhập mã PIN bảo mật!');
     print("GIẢI MÃ: Key (Base64) = ${_key!.base64}, IV (Base64) = ${_iv.base64}");
-    // Tắt padding (padding: null) khi giải mã giúp bỏ qua việc kiểm tra khối pad PKCS7 (tránh ném ngoại lệ Invalid pad block).
+    
+    // 1. Thử giải mã với PKCS7 padding (tương thích ảnh cũ trên Android và ảnh mới chuẩn)
+    try {
+      final encrypter = encrypt.Encrypter(encrypt.AES(_key!, mode: encrypt.AESMode.sic, padding: 'PKCS7'));
+      final encrypted = encrypt.Encrypted(Uint8List.fromList(bytes));
+      final decrypted = encrypter.decryptBytes(encrypted, iv: _iv);
+      return decrypted;
+    } catch (e) {
+      print("Giải mã với PKCS7 padding thất bại: $e. Thử giải mã không padding (padding: null)...");
+    }
+
+    // 2. Thử giải mã không padding (tương thích các ảnh test đã upload ở các bước trước)
     final encrypter = encrypt.Encrypter(encrypt.AES(_key!, mode: encrypt.AESMode.sic, padding: null));
     final encrypted = encrypt.Encrypted(Uint8List.fromList(bytes));
     return encrypter.decryptBytes(encrypted, iv: _iv);
