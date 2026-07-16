@@ -408,7 +408,7 @@ class _SecureGalleryScreenState extends State<SecureGalleryScreen> {
       final encryptedFullBytes = MyEncryptor.encryptData(originalBytes);
       
       await Amplify.Storage.uploadData(
-        data: StorageDataPayload.fromBytes(encryptedFullBytes),
+        data: StorageDataPayload.bytes(encryptedFullBytes),
         path: StoragePath.fromString('full/$_userId/$fileName'),
       ).result;
 
@@ -425,7 +425,7 @@ class _SecureGalleryScreenState extends State<SecureGalleryScreen> {
       final encryptedThumbBytes = MyEncryptor.encryptData(compressedBytes);
 
       await Amplify.Storage.uploadData(
-        data: StorageDataPayload.fromBytes(encryptedThumbBytes),
+        data: StorageDataPayload.bytes(encryptedThumbBytes),
         path: StoragePath.fromString('thumb/$_userId/$fileName'),
       ).result;
 
