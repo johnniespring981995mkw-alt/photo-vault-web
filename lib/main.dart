@@ -46,7 +46,7 @@ class MyEncryptor {
 
   static Uint8List encryptData(List<int> bytes) {
     if (_key == null) throw Exception('Chưa nhập mã PIN bảo mật!');
-    print("MÃ HÓA: Key (Base64) = \${_key!.base64}, IV (Base64) = \${_iv.base64}");
+    print("MÃ HÓA: Key (Base64) = ${_key!.base64}, IV (Base64) = ${_iv.base64}");
     final encrypter = encrypt.Encrypter(encrypt.AES(_key!));
     final encrypted = encrypter.encryptBytes(bytes, iv: _iv);
     return encrypted.bytes;
@@ -54,7 +54,7 @@ class MyEncryptor {
 
   static List<int> decryptData(List<int> bytes) {
     if (_key == null) throw Exception('Chưa nhập mã PIN bảo mật!');
-    print("GIẢI MÃ: Key (Base64) = \${_key!.base64}, IV (Base64) = \${_iv.base64}");
+    print("GIẢI MÃ: Key (Base64) = ${_key!.base64}, IV (Base64) = ${_iv.base64}");
     final encrypter = encrypt.Encrypter(encrypt.AES(_key!));
     final encrypted = encrypt.Encrypted(Uint8List.fromList(bytes));
     return encrypter.decryptBytes(encrypted, iv: _iv);
