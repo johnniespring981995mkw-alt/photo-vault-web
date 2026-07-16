@@ -543,7 +543,24 @@ class _EncryptedThumbnailState extends State<EncryptedThumbnail> {
       color: Colors.grey[300], 
       child: const Icon(Icons.lock_clock, color: Colors.grey)
     );
-    return Image.memory(_imageBytes!, fit: BoxFit.cover, gaplessPlayback: true);
+    return Image.memory(
+      _imageBytes!, 
+      fit: BoxFit.cover, 
+      gaplessPlayback: true,
+      errorBuilder: (context, error, stackTrace) {
+        return Container(
+          color: Colors.grey[200],
+          child: const Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.lock, color: Colors.red),
+              SizedBox(height: 4),
+              Text("Sai PIN", style: TextStyle(color: Colors.red, fontSize: 10, fontWeight: FontWeight.bold)),
+            ],
+          ),
+        );
+      },
+    );
   }
 }
 
@@ -672,7 +689,25 @@ class _DecryptViewerScreenState extends State<DecryptViewerScreen> {
             : _error != null 
                 ? Padding(padding: const EdgeInsets.all(20), child: Text(_error!, style: const TextStyle(color: Colors.red), textAlign: TextAlign.center))
                 : _fullImageBytes != null 
-                  ? InteractiveViewer(child: Image.memory(_fullImageBytes!))
+                  ? InteractiveViewer(
+                      child: Image.memory(
+                        _fullImageBytes!,
+                        errorBuilder: (context, error, stackTrace) {
+                          return const Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.lock, color: Colors.red, size: 64),
+                              SizedBox(height: 16),
+                              Text(
+                                "Không thể giải mã hình ảnh này!\nCó thể bạn đã nhập sai mã PIN so với lúc mã hóa tệp tin.",
+                                style: TextStyle(color: Colors.red, fontSize: 16),
+                                textAlign: TextAlign.center,
+                              ),
+                            ],
+                          );
+                        },
+                      ),
+                    )
                   : const SizedBox(),
       ),
     );
