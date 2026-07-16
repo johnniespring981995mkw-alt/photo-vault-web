@@ -376,7 +376,7 @@ class _SecureGalleryScreenState extends State<SecureGalleryScreen> {
       final result = await Amplify.Storage.list(
         path: StoragePath.fromString(path),
         options: const StorageListOptions(pageSize: 50),
-      );
+      ).result;
       
       final items = result.items;
       items.sort((a, b) => b.lastModified!.compareTo(a.lastModified!));
@@ -607,10 +607,10 @@ class _DecryptViewerScreenState extends State<DecryptViewerScreen> {
     try {
       showDialog(context: context, barrierDismissible: false, builder: (_) => const Center(child: CircularProgressIndicator()));
       
-      await Amplify.Storage.remove(path: StoragePath.fromString(widget.fullPath));
+      await Amplify.Storage.remove(path: StoragePath.fromString(widget.fullPath)).result;
       final thumbPath = widget.fullPath.replaceFirst('full/', 'thumb/');
       try {
-        await Amplify.Storage.remove(path: StoragePath.fromString(thumbPath));
+        await Amplify.Storage.remove(path: StoragePath.fromString(thumbPath)).result;
       } catch (_) {}
 
       if(mounted) {
