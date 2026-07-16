@@ -378,10 +378,15 @@ class _SecureGalleryScreenState extends State<SecureGalleryScreen> {
       final path = 'thumb/$_userId/';
       final result = await Amplify.Storage.list(
         path: StoragePath.fromString(path),
-        options: const StorageListOptions(pageSize: 50),
+        options: const StorageListOptions(pageSize: 1000),
       ).result;
       
       final items = result.items;
+      print("DANH SÁCH S3: Đã tìm thấy ${items.length} tệp tin trong thư mục $path");
+      for (var item in items) {
+        print("  - Tệp: ${item.path} (Sửa đổi lần cuối: ${item.lastModified})");
+      }
+      
       items.sort((a, b) => b.lastModified!.compareTo(a.lastModified!));
       
       setState(() {
@@ -389,6 +394,7 @@ class _SecureGalleryScreenState extends State<SecureGalleryScreen> {
         _isLoading = false;
       });
     } catch (e) {
+      print("Lỗi khi tải danh sách tệp S3: $e");
       setState(() => _isLoading = false);
     }
   }
