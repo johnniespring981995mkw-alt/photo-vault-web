@@ -174,13 +174,26 @@ class MyEncryptor {
     final fnMd5 = md5.convert(utf8.encode(nameWithoutExt));
     ivs["FILENAME_MD5_IV"] = encrypt.IV(Uint8List.fromList(fnMd5.bytes));
     
-    // Thử các loại Key khác nhau (SHA256 vs Padded raw bytes)
+    // 5. Thêm các IV từ seed cố định và PIN
+    final String knownPin = "888111";
+    ivs["ZERO_SEED_RANDOM_IV"] = encrypt.IV(Uint8List.fromList(List.generate(16, (i) => Random(0).nextInt(256))));
+    ivs["ONE_SEED_RANDOM_IV"] = encrypt.IV(Uint8List.fromList(List.generate(16, (i) => Random(1).nextInt(256))));
+    ivs["PIN_SEED_RANDOM_IV"] = encrypt.IV(Uint8List.fromList(List.generate(16, (i) => Random(int.parse(knownPin)).nextInt(256))));
+    
+    if (timestamp.isNotEmpty && suffix.isNotEmpty) {
+      final fileId = "${timestamp}_$suffix";
+      final fileIdMd5 = md5.convert(utf8.encode(fileId));
+      ivs["FILEID_MD5_IV"] = encrypt.IV(Uint8List.fromList(fileIdMd5.bytes));
+      
+      final fileIdSha = sha256.convert(utf8.encode(fileId));
+      ivs["FILEID_SHA256_IV"] = encrypt.IV(Uint8List.fromList(fileIdSha.bytes.sublist(0, 16)));
+    }
+    
+    // Thử các loại Key khác nhau (SHA256 vs Padded raw bytes vs Hex-based keys)
     final Map<String, encrypt.Key> keys = {
       "SHA256_KEY": _key!
     };
     
-    // 5. Thêm các key candidate từ PIN
-    final String knownPin = "888111";
     final pinBytes = utf8.encode(knownPin);
     
     // Key 1: Raw PIN padded to 32 bytes
@@ -201,6 +214,20 @@ class MyEncryptor {
     final md5Pin = md5.convert(pinBytes);
     keys["MD5_PIN_KEY"] = encrypt.Key(Uint8List.fromList(md5Pin.bytes));
 
+    // Key 4: Hex string of SHA256 (first 32 chars)
+    final sha256Hex = sha256.convert(pinBytes).toString();
+    keys["HEX_SHA256_SUB32_KEY"] = encrypt.Key.fromUtf8(sha256Hex.substring(0, 32));
+    
+    // Key 5: Hex string of SHA256 (last 32 chars)
+    keys["HEX_SHA256_SUB32_LAST_KEY"] = encrypt.Key.fromUtf8(sha256Hex.substring(32, 64));
+    
+    // Key 6: Hex string of MD5 of PIN (32 chars)
+    keys["HEX_MD5_KEY"] = encrypt.Key.fromUtf8(md5Pin.toString());
+    
+    // Key 7: Base64 string of SHA256 (first 32 chars)
+    final sha256Base64 = base64.encode(sha256.convert(pinBytes).bytes);
+    keys["BASE64_SHA256_SUB32_KEY"] = encrypt.Key.fromUtf8(sha256Base64.substring(0, 32));
+
     final List<encrypt.AESMode> modes = [
       encrypt.AESMode.sic,
       encrypt.AESMode.cbc,
@@ -219,12 +246,34 @@ class MyEncryptor {
               final encrypted = encrypt.Encrypted(Uint8List.fromList(encryptedBytes));
               final decrypted = encrypter.decryptBytes(encrypted, iv: ivVal);
               
-              final isJpeg = decrypted.length >= 3 && decrypted[0] == 0xFF && decrypted[1] == 0xD8 && decrypted[2] == 0xFF;
-              final isPng = decrypted.length >= 4 && decrypted[0] == 0x89 && decrypted[1] == 0x50 && decrypted[2] == 0x4E && decrypted[3] == 0x47;
-              
-              if (isJpeg || isPng) {
-                print(">>> KẾT QUẢ THÀNH CÔNG: Key = $keyName, IV = $ivName, Mode = ${mode.toString()}, Padding = $padding, Định dạng = ${isJpeg ? 'JPEG' : 'PNG'} !!!");
-                print("First 10 bytes: ${decrypted.sublist(0, 10).map((b) => b.toRadixString(16).padLeft(2, '0')).join(' ')}");
+              if (decrypted.length >= 4) {
+                bool isPossibleImage = false;
+                String formatName = "";
+                
+                if (decrypted[0] == 0xFF && decrypted[1] == 0xD8) {
+                  isPossibleImage = true;
+                  formatName = "JPEG";
+                } else if (decrypted[0] == 0x89 && decrypted[1] == 0x50) {
+                  isPossibleImage = true;
+                  formatName = "PNG";
+                } else if (decrypted[0] == 0x47 && decrypted[1] == 0x49 && decrypted[2] == 0x46) {
+                  isPossibleImage = true;
+                  formatName = "GIF";
+                } else if (decrypted[0] == 0x52 && decrypted[1] == 0x49 && decrypted[2] == 0x46 && decrypted[3] == 0x46) {
+                  isPossibleImage = true;
+                  formatName = "RIFF/WebP";
+                } else if (decrypted.length >= 8 && decrypted[4] == 0x66 && decrypted[5] == 0x74 && decrypted[6] == 0x79 && decrypted[7] == 0x70) {
+                  isPossibleImage = true;
+                  formatName = "HEIC/HEIF";
+                } else if (decrypted[0] == 0x50 && decrypted[1] == 0x4B && decrypted[2] == 0x03 && decrypted[3] == 0x04) {
+                  isPossibleImage = true;
+                  formatName = "Zip";
+                }
+                
+                if (isPossibleImage) {
+                  print(">>> KẾT QUẢ THÀNH CÔNG: Key = $keyName, IV = $ivName, Mode = ${mode.toString()}, Padding = $padding, Định dạng = $formatName !!!");
+                  print("First 10 bytes: ${decrypted.sublist(0, min(10, decrypted.length)).map((b) => b.toRadixString(16).padLeft(2, '0')).join(' ')}");
+                }
               }
             } catch (e) {
               // bỏ qua lỗi
