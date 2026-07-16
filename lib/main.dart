@@ -105,19 +105,28 @@ class MyEncryptor {
       }
       ivs["SUFFIX_STRING_BYTES_PAD_0"] = encrypt.IV(ivBytes);
       
-      // 2b. Suffix làm seed Random
+      // 2b. Suffix làm seed Random (byte-by-byte)
       final seed = int.tryParse(suffix);
       if (seed != null) {
         final random = Random(seed);
         final ivBytes = Uint8List.fromList(List.generate(16, (i) => random.nextInt(256)));
         ivs["SUFFIX_RANDOM_SEED_IV"] = encrypt.IV(ivBytes);
+        
+        // 2c. Suffix làm seed Random (uint32)
+        final random2 = Random(seed);
+        final byteData = ByteData(16);
+        byteData.setUint32(0, random2.nextInt(0xFFFFFFFF));
+        byteData.setUint32(4, random2.nextInt(0xFFFFFFFF));
+        byteData.setUint32(8, random2.nextInt(0xFFFFFFFF));
+        byteData.setUint32(12, random2.nextInt(0xFFFFFFFF));
+        ivs["SUFFIX_RANDOM_SEED_UINT32_IV"] = encrypt.IV(byteData.buffer.asUint8List());
       }
       
-      // 2c. MD5 của suffix string
+      // 2d. MD5 của suffix string
       final md5Digest = md5.convert(utf8.encode(suffix));
       ivs["SUFFIX_MD5_IV"] = encrypt.IV(Uint8List.fromList(md5Digest.bytes));
       
-      // 2d. SHA-256 của suffix string (cắt 16 bytes)
+      // 2e. SHA-256 của suffix string (cắt 16 bytes)
       final sha256Digest = sha256.convert(utf8.encode(suffix));
       ivs["SUFFIX_SHA256_IV"] = encrypt.IV(Uint8List.fromList(sha256Digest.bytes.sublist(0, 16)));
     }
@@ -132,15 +141,24 @@ class MyEncryptor {
       }
       ivs["TIMESTAMP_STRING_BYTES_PAD_0"] = encrypt.IV(ivBytes);
       
-      // 3b. Timestamp làm seed Random
+      // 3b. Timestamp làm seed Random (byte-by-byte)
       final seed = int.tryParse(timestamp);
       if (seed != null) {
         final random = Random(seed);
         final ivBytes = Uint8List.fromList(List.generate(16, (i) => random.nextInt(256)));
         ivs["TIMESTAMP_RANDOM_SEED_IV"] = encrypt.IV(ivBytes);
+        
+        // 3c. Timestamp làm seed Random (uint32)
+        final random2 = Random(seed);
+        final byteData = ByteData(16);
+        byteData.setUint32(0, random2.nextInt(0xFFFFFFFF));
+        byteData.setUint32(4, random2.nextInt(0xFFFFFFFF));
+        byteData.setUint32(8, random2.nextInt(0xFFFFFFFF));
+        byteData.setUint32(12, random2.nextInt(0xFFFFFFFF));
+        ivs["TIMESTAMP_RANDOM_SEED_UINT32_IV"] = encrypt.IV(byteData.buffer.asUint8List());
       }
       
-      // 3c. MD5 của timestamp string
+      // 3d. MD5 của timestamp string
       final md5Digest = md5.convert(utf8.encode(timestamp));
       ivs["TIMESTAMP_MD5_IV"] = encrypt.IV(Uint8List.fromList(md5Digest.bytes));
     }
@@ -161,24 +179,56 @@ class MyEncryptor {
       "SHA256_KEY": _key!
     };
     
+    // 5. Thêm các key candidate từ PIN
+    final String knownPin = "888111";
+    final pinBytes = utf8.encode(knownPin);
+    
+    // Key 1: Raw PIN padded to 32 bytes
+    final keyBytes32 = Uint8List(32);
+    for (int i = 0; i < pinBytes.length && i < 32; i++) {
+      keyBytes32[i] = pinBytes[i];
+    }
+    keys["RAW_PIN_PAD_0_KEY_32"] = encrypt.Key(keyBytes32);
+    
+    // Key 2: Raw PIN padded to 16 bytes
+    final keyBytes16 = Uint8List(16);
+    for (int i = 0; i < pinBytes.length && i < 16; i++) {
+      keyBytes16[i] = pinBytes[i];
+    }
+    keys["RAW_PIN_PAD_0_KEY_16"] = encrypt.Key(keyBytes16);
+    
+    // Key 3: MD5 of PIN
+    final md5Pin = md5.convert(pinBytes);
+    keys["MD5_PIN_KEY"] = encrypt.Key(Uint8List.fromList(md5Pin.bytes));
+
+    final List<encrypt.AESMode> modes = [
+      encrypt.AESMode.sic,
+      encrypt.AESMode.cbc,
+      encrypt.AESMode.cfb64,
+      encrypt.AESMode.ofb64,
+      encrypt.AESMode.ecb,
+    ];
+    
     // Chạy thử từng tổ hợp
     keys.forEach((keyName, keyVal) {
       ivs.forEach((ivName, ivVal) {
-        for (var padding in ['PKCS7', null]) {
-          try {
-            final encrypter = encrypt.Encrypter(encrypt.AES(keyVal, mode: encrypt.AESMode.sic, padding: padding));
-            final encrypted = encrypt.Encrypted(Uint8List.fromList(encryptedBytes));
-            final decrypted = encrypter.decryptBytes(encrypted, iv: ivVal);
-            
-            final isJpeg = decrypted.length >= 3 && decrypted[0] == 0xFF && decrypted[1] == 0xD8 && decrypted[2] == 0xFF;
-            final isPng = decrypted.length >= 4 && decrypted[0] == 0x89 && decrypted[1] == 0x50 && decrypted[2] == 0x4E && decrypted[3] == 0x47;
-            
-            if (isJpeg || isPng) {
-              print(">>> KẾT QUẢ THÀNH CÔNG: Key = $keyName, IV = $ivName, Padding = $padding, Định dạng = ${isJpeg ? 'JPEG' : 'PNG'} !!!");
-              print("First 10 bytes: ${decrypted.sublist(0, 10).map((b) => b.toRadixString(16).padLeft(2, '0')).join(' ')}");
+        for (final mode in modes) {
+          for (var padding in ['PKCS7', null]) {
+            try {
+              final encrypter = encrypt.Encrypter(encrypt.AES(keyVal, mode: mode, padding: padding));
+              final encrypted = encrypt.Encrypted(Uint8List.fromList(encryptedBytes));
+              final decrypted = encrypter.decryptBytes(encrypted, iv: ivVal);
+              
+              final isJpeg = decrypted.length >= 3 && decrypted[0] == 0xFF && decrypted[1] == 0xD8 && decrypted[2] == 0xFF;
+              final isPng = decrypted.length >= 4 && decrypted[0] == 0x89 && decrypted[1] == 0x50 && decrypted[2] == 0x4E && decrypted[3] == 0x47;
+              
+              if (isJpeg || isPng) {
+                print(">>> KẾT QUẢ THÀNH CÔNG: Key = $keyName, IV = $ivName, Mode = ${mode.toString()}, Padding = $padding, Định dạng = ${isJpeg ? 'JPEG' : 'PNG'} !!!");
+                print("First 10 bytes: ${decrypted.sublist(0, 10).map((b) => b.toRadixString(16).padLeft(2, '0')).join(' ')}");
+              }
+            } catch (e) {
+              // bỏ qua lỗi
             }
-          } catch (e) {
-            // bỏ qua lỗi
           }
         }
       });
