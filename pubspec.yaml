@@ -1,0 +1,32 @@
+name: photo_cloud
+description: "A secure cloud photo vault built with Flutter and AWS Amplify."
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.2.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  cupertino_icons: ^1.0.6
+  amplify_flutter: ^2.0.0
+  amplify_auth_cognito: ^2.0.0
+  amplify_storage_s3: ^2.0.0
+  amplify_authenticator: ^2.0.0
+  crypto: ^3.0.3
+  encrypt: ^5.0.3
+  image: ^4.2.0
+  gallery_saver: ^2.3.2
+  path_provider: ^2.1.2
+  intl: ^0.19.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+
+flutter:
+  uses-material-design: true
