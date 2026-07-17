@@ -482,7 +482,8 @@ class _SecureGalleryScreenState extends State<SecureGalleryScreen> {
       final decodedImage = img.decodeImage(originalBytes);
       List<int> compressedBytes;
       if (decodedImage != null) {
-        final thumbnail = img.copyResize(decodedImage, width: 200, height: 200);
+        // Tạo ảnh thumbnail hình vuông 200x200 bằng cách resize và crop để giữ nguyên tỷ lệ (aspect ratio) không bị méo ảnh
+        final thumbnail = img.copyResizeCropSquare(decodedImage, size: 200);
         compressedBytes = img.encodeJpg(thumbnail, quality: 50);
       } else {
         compressedBytes = originalBytes;
