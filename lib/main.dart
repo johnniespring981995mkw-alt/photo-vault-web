@@ -529,9 +529,10 @@ class _SecureGalleryScreenState extends State<SecureGalleryScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final imageCount = _thumbFiles.where((item) => !item.path.endsWith('/')).length;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Kho Ảnh Bí Mật'),
+        title: Text('Kho Ảnh Bí Mật ($imageCount)'),
         actions: [
           IconButton(icon: const Icon(Icons.refresh), onPressed: _fetchFiles),
           // Khi logout thì quay về màn hình đăng nhập AWS
