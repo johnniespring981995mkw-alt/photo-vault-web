@@ -23,6 +23,7 @@ import 'package:image/image.dart' as img; // Thay thế flutter_image_compress b
 
 // Helper tải ảnh đa nền tảng
 import 'download_helper.dart';
+import 'thumbnail_helper.dart';
 
 void main() {
   runApp(const MyApp());
@@ -534,16 +535,8 @@ class _SecureGalleryScreenState extends State<SecureGalleryScreen> {
           path: StoragePath.fromString('full/$_userId/$fileName'),
         ).result;
 
-        // 2. Mã hóa & Upload Thumb (Sử dụng thư viện 'image' thuần Dart)
-        final decodedImage = img.decodeImage(originalBytes);
-        List<int> compressedBytes;
-        if (decodedImage != null) {
-          // Tạo ảnh thumbnail hình vuông 200x200 bằng cách resize và crop để giữ nguyên tỷ lệ (aspect ratio) không bị méo ảnh
-          final thumbnail = img.copyResizeCropSquare(decodedImage, size: 200);
-          compressedBytes = img.encodeJpg(thumbnail, quality: 50);
-        } else {
-          compressedBytes = originalBytes;
-        }
+        // 2. Mã hóa & Upload Thumb (Sử dụng bộ tạo ảnh đa nền tảng tối ưu)
+        final compressedBytes = await generateThumbnail(originalBytes);
         
         final encryptedThumbBytes = MyEncryptor.encryptData(compressedBytes);
         
@@ -556,6 +549,9 @@ class _SecureGalleryScreenState extends State<SecureGalleryScreen> {
       } catch (e) {
         print('Lỗi upload file ${image.name}: $e');
       }
+
+      // Giải phóng luồng chính và cho phép garbage collector thu gom bộ nhớ sau mỗi ảnh
+      await Future.delayed(Duration.zero);
     }
 
     setState(() {
