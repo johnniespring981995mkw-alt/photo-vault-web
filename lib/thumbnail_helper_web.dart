@@ -35,7 +35,7 @@ Future<Uint8List> createThumbnail(Uint8List originalBytes) async {
         
         ctx.drawImageToRect(
           image,
-          destRect: const html.Rectangle(0, 0, size, size),
+          const html.Rectangle(0, 0, size, size),
           sourceRect: html.Rectangle(sx, sy, sw, sh),
         );
         
