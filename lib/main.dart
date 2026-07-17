@@ -47,243 +47,74 @@ class MyEncryptor {
 
   static Uint8List encryptData(List<int> bytes) {
     if (_key == null) throw Exception('Chưa nhập mã PIN bảo mật!');
-    print("MÃ HÓA: Key (Base64) = ${_key!.base64}, IV (Base64) = ${_iv.base64}");
-    // Sử dụng PKCS7 padding làm mặc định để tương thích hoàn toàn hai chiều với Mobile
-    final encrypter = encrypt.Encrypter(encrypt.AES(_key!, mode: encrypt.AESMode.sic, padding: 'PKCS7'));
-    final encrypted = encrypter.encryptBytes(bytes, iv: _iv);
-    return encrypted.bytes;
+    
+    // Sinh IV ngẫu nhiên bảo mật (16 bytes)
+    final iv = encrypt.IV.fromLength(16);
+    
+    // Sử dụng AES-CTR (SIC) không padding làm chuẩn bảo mật cao và hiệu năng tốt
+    final encrypter = encrypt.Encrypter(encrypt.AES(_key!, mode: encrypt.AESMode.sic, padding: null));
+    final encrypted = encrypter.encryptBytes(bytes, iv: iv);
+    
+    // Ghép IV (16 bytes) vào đầu ciphertext để lưu trữ tự chứa (self-contained)
+    final output = Uint8List(16 + encrypted.bytes.length);
+    output.setRange(0, 16, iv.bytes);
+    output.setRange(16, output.length, encrypted.bytes);
+    
+    print("MÃ HÓA: Đã tạo file với IV ngẫu nhiên prepended. IV (Base64) = ${iv.base64}");
+    return output;
   }
 
   static List<int> decryptData(List<int> bytes) {
     if (_key == null) throw Exception('Chưa nhập mã PIN bảo mật!');
-    print("GIẢI MÃ: Key (Base64) = ${_key!.base64}, IV (Base64) = ${_iv.base64}");
-    
-    // 1. Thử giải mã với PKCS7 padding (tương thích ảnh cũ trên Android và ảnh mới chuẩn)
-    try {
-      final encrypter = encrypt.Encrypter(encrypt.AES(_key!, mode: encrypt.AESMode.sic, padding: 'PKCS7'));
-      final encrypted = encrypt.Encrypted(Uint8List.fromList(bytes));
-      final decrypted = encrypter.decryptBytes(encrypted, iv: _iv);
-      return decrypted;
-    } catch (e) {
-      print("Giải mã với PKCS7 padding thất bại: $e. Thử giải mã không padding (padding: null)...");
-    }
 
-    // 2. Thử giải mã không padding (tương thích các ảnh test đã upload ở các bước trước)
-    final encrypter = encrypt.Encrypter(encrypt.AES(_key!, mode: encrypt.AESMode.sic, padding: null));
-    final encrypted = encrypt.Encrypted(Uint8List.fromList(bytes));
-    return encrypter.decryptBytes(encrypted, iv: _iv);
-  }
-
-  static void testDecrypt(Uint8List encryptedBytes, String filename) {
-    if (_key == null) return;
-    print("===== CHẠY THỬ NGHIỆM GIẢI MÃ CHO FILE: $filename =====");
-    
-    // Tìm các phần của tên file
-    final nameWithoutExt = filename.split('.').first; // e.g. img_1766246583839_212824140
-    final parts = nameWithoutExt.split('_');
-    
-    String timestamp = "";
-    String suffix = "";
-    if (parts.length >= 2) timestamp = parts[1];
-    if (parts.length >= 3) suffix = parts[2];
-    
-    print("Parsed: timestamp = '$timestamp', suffix = '$suffix'");
-    
-    // Các loại IV cần test:
-    final Map<String, encrypt.IV> ivs = {};
-    
-    // 1. IV toàn 0
-    ivs["ALL_ZERO_IV"] = encrypt.IV(Uint8List(16));
-    
-    // 2. IV từ suffix (nếu có)
-    if (suffix.isNotEmpty) {
-      // 2a. Suffix dạng string bytes pad 0
-      final suffixBytes = utf8.encode(suffix);
-      final ivBytes = Uint8List(16);
-      for (int i = 0; i < suffixBytes.length && i < 16; i++) {
-        ivBytes[i] = suffixBytes[i];
-      }
-      ivs["SUFFIX_STRING_BYTES_PAD_0"] = encrypt.IV(ivBytes);
-      
-      // 2b. Suffix làm seed Random (byte-by-byte)
-      final seed = int.tryParse(suffix);
-      if (seed != null) {
-        final random = Random(seed);
-        final ivBytes = Uint8List.fromList(List.generate(16, (i) => random.nextInt(256)));
-        ivs["SUFFIX_RANDOM_SEED_IV"] = encrypt.IV(ivBytes);
+    // Cách 1: Thử định dạng có IV đi kèm (16 byte đầu là IV, phần còn lại là ciphertext)
+    if (bytes.length > 16) {
+      try {
+        final ivBytes = Uint8List.fromList(bytes.sublist(0, 16));
+        final iv = encrypt.IV(ivBytes);
+        final ciphertextBytes = Uint8List.fromList(bytes.sublist(16));
         
-        // 2c. Suffix làm seed Random (uint32)
-        final random2 = Random(seed);
-        final byteData = ByteData(16);
-        byteData.setUint32(0, random2.nextInt(0xFFFFFFFF));
-        byteData.setUint32(4, random2.nextInt(0xFFFFFFFF));
-        byteData.setUint32(8, random2.nextInt(0xFFFFFFFF));
-        byteData.setUint32(12, random2.nextInt(0xFFFFFFFF));
-        ivs["SUFFIX_RANDOM_SEED_UINT32_IV"] = encrypt.IV(byteData.buffer.asUint8List());
-      }
-      
-      // 2d. MD5 của suffix string
-      final md5Digest = md5.convert(utf8.encode(suffix));
-      ivs["SUFFIX_MD5_IV"] = encrypt.IV(Uint8List.fromList(md5Digest.bytes));
-      
-      // 2e. SHA-256 của suffix string (cắt 16 bytes)
-      final sha256Digest = sha256.convert(utf8.encode(suffix));
-      ivs["SUFFIX_SHA256_IV"] = encrypt.IV(Uint8List.fromList(sha256Digest.bytes.sublist(0, 16)));
-    }
-    
-    // 3. IV từ timestamp (nếu có)
-    if (timestamp.isNotEmpty) {
-      // 3a. Timestamp string bytes pad 0
-      final tsBytes = utf8.encode(timestamp);
-      final ivBytes = Uint8List(16);
-      for (int i = 0; i < tsBytes.length && i < 16; i++) {
-        ivBytes[i] = tsBytes[i];
-      }
-      ivs["TIMESTAMP_STRING_BYTES_PAD_0"] = encrypt.IV(ivBytes);
-      
-      // 3b. Timestamp làm seed Random (byte-by-byte)
-      final seed = int.tryParse(timestamp);
-      if (seed != null) {
-        final random = Random(seed);
-        final ivBytes = Uint8List.fromList(List.generate(16, (i) => random.nextInt(256)));
-        ivs["TIMESTAMP_RANDOM_SEED_IV"] = encrypt.IV(ivBytes);
+        final encrypter = encrypt.Encrypter(encrypt.AES(_key!, mode: encrypt.AESMode.sic, padding: null));
+        final decrypted = encrypter.decryptBytes(encrypt.Encrypted(ciphertextBytes), iv: iv);
         
-        // 3c. Timestamp làm seed Random (uint32)
-        final random2 = Random(seed);
-        final byteData = ByteData(16);
-        byteData.setUint32(0, random2.nextInt(0xFFFFFFFF));
-        byteData.setUint32(4, random2.nextInt(0xFFFFFFFF));
-        byteData.setUint32(8, random2.nextInt(0xFFFFFFFF));
-        byteData.setUint32(12, random2.nextInt(0xFFFFFFFF));
-        ivs["TIMESTAMP_RANDOM_SEED_UINT32_IV"] = encrypt.IV(byteData.buffer.asUint8List());
-      }
-      
-      // 3d. MD5 của timestamp string
-      final md5Digest = md5.convert(utf8.encode(timestamp));
-      ivs["TIMESTAMP_MD5_IV"] = encrypt.IV(Uint8List.fromList(md5Digest.bytes));
-    }
-    
-    // 4. IV từ cả filename (không đuôi)
-    final fnBytes = utf8.encode(nameWithoutExt);
-    final fnIvBytes = Uint8List(16);
-    for (int i = 0; i < fnBytes.length && i < 16; i++) {
-      fnIvBytes[i] = fnBytes[i];
-    }
-    ivs["FILENAME_BYTES_PAD_0"] = encrypt.IV(fnIvBytes);
-    
-    final fnMd5 = md5.convert(utf8.encode(nameWithoutExt));
-    ivs["FILENAME_MD5_IV"] = encrypt.IV(Uint8List.fromList(fnMd5.bytes));
-    
-    // 5. Thêm các IV từ seed cố định và PIN
-    final String knownPin = "888111";
-    ivs["ZERO_SEED_RANDOM_IV"] = encrypt.IV(Uint8List.fromList(List.generate(16, (i) => Random(0).nextInt(256))));
-    ivs["ONE_SEED_RANDOM_IV"] = encrypt.IV(Uint8List.fromList(List.generate(16, (i) => Random(1).nextInt(256))));
-    ivs["PIN_SEED_RANDOM_IV"] = encrypt.IV(Uint8List.fromList(List.generate(16, (i) => Random(int.parse(knownPin)).nextInt(256))));
-    
-    if (timestamp.isNotEmpty && suffix.isNotEmpty) {
-      final fileId = "${timestamp}_$suffix";
-      final fileIdMd5 = md5.convert(utf8.encode(fileId));
-      ivs["FILEID_MD5_IV"] = encrypt.IV(Uint8List.fromList(fileIdMd5.bytes));
-      
-      final fileIdSha = sha256.convert(utf8.encode(fileId));
-      ivs["FILEID_SHA256_IV"] = encrypt.IV(Uint8List.fromList(fileIdSha.bytes.sublist(0, 16)));
-    }
-    
-    // Thử các loại Key khác nhau (SHA256 vs Padded raw bytes vs Hex-based keys)
-    final Map<String, encrypt.Key> keys = {
-      "SHA256_KEY": _key!
-    };
-    
-    final pinBytes = utf8.encode(knownPin);
-    
-    // Key 1: Raw PIN padded to 32 bytes
-    final keyBytes32 = Uint8List(32);
-    for (int i = 0; i < pinBytes.length && i < 32; i++) {
-      keyBytes32[i] = pinBytes[i];
-    }
-    keys["RAW_PIN_PAD_0_KEY_32"] = encrypt.Key(keyBytes32);
-    
-    // Key 2: Raw PIN padded to 16 bytes
-    final keyBytes16 = Uint8List(16);
-    for (int i = 0; i < pinBytes.length && i < 16; i++) {
-      keyBytes16[i] = pinBytes[i];
-    }
-    keys["RAW_PIN_PAD_0_KEY_16"] = encrypt.Key(keyBytes16);
-    
-    // Key 3: MD5 of PIN
-    final md5Pin = md5.convert(pinBytes);
-    keys["MD5_PIN_KEY"] = encrypt.Key(Uint8List.fromList(md5Pin.bytes));
-
-    // Key 4: Hex string of SHA256 (first 32 chars)
-    final sha256Hex = sha256.convert(pinBytes).toString();
-    keys["HEX_SHA256_SUB32_KEY"] = encrypt.Key.fromUtf8(sha256Hex.substring(0, 32));
-    
-    // Key 5: Hex string of SHA256 (last 32 chars)
-    keys["HEX_SHA256_SUB32_LAST_KEY"] = encrypt.Key.fromUtf8(sha256Hex.substring(32, 64));
-    
-    // Key 6: Hex string of MD5 of PIN (32 chars)
-    keys["HEX_MD5_KEY"] = encrypt.Key.fromUtf8(md5Pin.toString());
-    
-    // Key 7: Base64 string of SHA256 (first 32 chars)
-    final sha256Base64 = base64.encode(sha256.convert(pinBytes).bytes);
-    keys["BASE64_SHA256_SUB32_KEY"] = encrypt.Key.fromUtf8(sha256Base64.substring(0, 32));
-
-    final List<encrypt.AESMode> modes = [
-      encrypt.AESMode.sic,
-      encrypt.AESMode.cbc,
-      encrypt.AESMode.cfb64,
-      encrypt.AESMode.ofb64,
-      encrypt.AESMode.ecb,
-    ];
-    
-    // Chạy thử từng tổ hợp
-    keys.forEach((keyName, keyVal) {
-      ivs.forEach((ivName, ivVal) {
-        for (final mode in modes) {
-          for (var padding in ['PKCS7', null]) {
-            try {
-              final encrypter = encrypt.Encrypter(encrypt.AES(keyVal, mode: mode, padding: padding));
-              final encrypted = encrypt.Encrypted(Uint8List.fromList(encryptedBytes));
-              final decrypted = encrypter.decryptBytes(encrypted, iv: ivVal);
-              
-              if (decrypted.length >= 4) {
-                bool isPossibleImage = false;
-                String formatName = "";
-                
-                if (decrypted[0] == 0xFF && decrypted[1] == 0xD8) {
-                  isPossibleImage = true;
-                  formatName = "JPEG";
-                } else if (decrypted[0] == 0x89 && decrypted[1] == 0x50) {
-                  isPossibleImage = true;
-                  formatName = "PNG";
-                } else if (decrypted[0] == 0x47 && decrypted[1] == 0x49 && decrypted[2] == 0x46) {
-                  isPossibleImage = true;
-                  formatName = "GIF";
-                } else if (decrypted[0] == 0x52 && decrypted[1] == 0x49 && decrypted[2] == 0x46 && decrypted[3] == 0x46) {
-                  isPossibleImage = true;
-                  formatName = "RIFF/WebP";
-                } else if (decrypted.length >= 8 && decrypted[4] == 0x66 && decrypted[5] == 0x74 && decrypted[6] == 0x79 && decrypted[7] == 0x70) {
-                  isPossibleImage = true;
-                  formatName = "HEIC/HEIF";
-                } else if (decrypted[0] == 0x50 && decrypted[1] == 0x4B && decrypted[2] == 0x03 && decrypted[3] == 0x04) {
-                  isPossibleImage = true;
-                  formatName = "Zip";
-                }
-                
-                if (isPossibleImage) {
-                  print(">>> KẾT QUẢ THÀNH CÔNG: Key = $keyName, IV = $ivName, Mode = ${mode.toString()}, Padding = $padding, Định dạng = $formatName !!!");
-                  print("First 10 bytes: ${decrypted.sublist(0, min(10, decrypted.length)).map((b) => b.toRadixString(16).padLeft(2, '0')).join(' ')}");
-                }
-              }
-            } catch (e) {
-              // bỏ qua lỗi
-            }
+        // Kiểm tra xem có đúng định dạng ảnh hợp lệ không (JPEG, PNG, WebP, GIF)
+        if (decrypted.length >= 3) {
+          final h0 = decrypted[0];
+          final h1 = decrypted[1];
+          final h2 = decrypted[2];
+          // JPEG: FF D8 FF
+          // PNG: 89 50 4E
+          // WebP/RIFF: 52 49 46 (R I F)
+          // GIF: 47 49 46 (G I F)
+          if ((h0 == 0xFF && h1 == 0xD8 && h2 == 0xFF) ||
+              (h0 == 0x89 && h1 == 0x50 && h2 == 0x4E) ||
+              (h0 == 0x52 && h1 == 0x49 && h2 == 0x46) ||
+              (h0 == 0x47 && h1 == 0x49 && h2 == 0x46)) {
+            print("GIẢI MÃ THÀNH CÔNG: Định dạng có IV đi kèm (16-byte prepended). IV (Base64) = ${iv.base64}");
+            return decrypted;
           }
         }
-      });
-    });
-    print("=================================================");
+      } catch (e) {
+        print("Thử giải mã định dạng có IV đi kèm thất bại: $e. Sẽ thử định dạng cũ...");
+      }
+    }
+
+    // Cách 2: Fallback giải mã định dạng cũ (không có IV đi kèm, IV mặc định toàn 0)
+    print("GIẢI MÃ FALLBACK: Đang thử giải mã định dạng cũ (IV mặc định toàn 0)...");
+    final defaultIv = encrypt.IV(Uint8List(16));
+    
+    // Thử giải mã không padding
+    try {
+      final encrypter = encrypt.Encrypter(encrypt.AES(_key!, mode: encrypt.AESMode.sic, padding: null));
+      return encrypter.decryptBytes(encrypt.Encrypted(Uint8List.fromList(bytes)), iv: defaultIv);
+    } catch (e) {
+      // Thử giải mã với PKCS7 padding
+      final encrypter = encrypt.Encrypter(encrypt.AES(_key!, mode: encrypt.AESMode.sic, padding: 'PKCS7'));
+      return encrypter.decryptBytes(encrypt.Encrypted(Uint8List.fromList(bytes)), iv: defaultIv);
+    }
   }
+
+
 }
 
 class MyApp extends StatefulWidget {
@@ -617,83 +448,6 @@ class _SecureGalleryScreenState extends State<SecureGalleryScreen> {
         _isLoading = false;
       });
 
-      // Chạy thử nghiệm giải mã tự động cho 3 file mới nhất (bao gồm cả phone upload hôm nay)
-      print("TÌM THẤY ${items.length} FILE ĐỂ CHẠY THỬ NGHIỆM FILE MỚI NHẤT:");
-      for (int i = 0; i < items.length && i < 3; i++) {
-        final item = items[i];
-        print("--- THỬ NGHIỆM TỰ ĐỘNG CHO FILE MỚI NHẤT: ${item.path} ---");
-        try {
-          final res = await Amplify.Storage.downloadData(
-            path: StoragePath.fromString(item.path),
-          ).result;
-          final bytes = res.bytes;
-          final hexBytes = bytes.sublist(0, min(32, bytes.length)).map((b) => b.toRadixString(16).padLeft(2, '0')).join(' ');
-          print("RAW ENCRYPTED BYTES (first 32): $hexBytes");
-          MyEncryptor.testDecrypt(Uint8List.fromList(bytes), item.path.split('/').last);
-        } catch (e) {
-          print("Lỗi khi tải/test file mới: $e");
-        }
-      }
-
-      // THỬ NGHIỆM RIÊNG CHO HAI FILE ĐỂ XÁC MINH CIPHERTEXT
-      print("--- XÁC MINH CIPHERTEXT CHO HAI FILE PHONE UPLOAD ---");
-      for (final targetPath in [
-        "thumb/ap-southeast-1:03602ffd-7b75-c609-7fc2-63e04f2e50fd/img_1766328410546_748685478.enc",
-        "thumb/ap-southeast-1:03602ffd-7b75-c609-7fc2-63e04f2e50fd/img_1784177790604_549506859.enc"
-      ]) {
-        try {
-          final res = await Amplify.Storage.downloadData(
-            path: StoragePath.fromString(targetPath),
-          ).result;
-          final bytes = res.bytes;
-          final hexBytes = bytes.sublist(0, min(32, bytes.length)).map((b) => b.toRadixString(16).padLeft(2, '0')).join(' ');
-          print("XÁC MINH: $targetPath -> $hexBytes");
-          MyEncryptor.testDecrypt(Uint8List.fromList(bytes), targetPath.split('/').last);
-        } catch (e) {
-          print("Không tải được file xác minh $targetPath: $e");
-        }
-      }
-
-      print("--- IN CIPHERTEXT CỦA TẤT CẢ FILE PHONE UPLOAD HÔM NAY ---");
-      final todayPhoneItems = items.where((item) {
-        final filename = item.path.split('/').last;
-        return filename.contains('_') && filename.startsWith('img_1784177');
-      }).toList();
-      for (final item in todayPhoneItems) {
-        try {
-          final res = await Amplify.Storage.downloadData(
-            path: StoragePath.fromString(item.path),
-          ).result;
-          final bytes = res.bytes;
-          final hexBytes = bytes.sublist(0, min(32, bytes.length)).map((b) => b.toRadixString(16).padLeft(2, '0')).join(' ');
-          print("TODAY PHONE FILE: ${item.path.split('/').last} -> $hexBytes");
-        } catch (e) {
-          print("Lỗi tải file hôm nay ${item.path}: $e");
-        }
-      }
-
-      // Chạy thử nghiệm giải mã tự động cho 3 file cũ từ năm 2025
-      final oldItems = items.where((item) {
-        final filename = item.path.split('/').last;
-        return filename.contains('_') && filename.startsWith('img_1766');
-      }).toList();
-
-      print("TÌM THẤY ${oldItems.length} FILE CŨ NĂM 2025 ĐỂ CHẠY THỬ NGHIỆM:");
-      for (int i = 0; i < oldItems.length && i < 3; i++) {
-        final item = oldItems[i];
-        print("--- THỬ NGHIỆM TỰ ĐỘNG CHO FILE CŨ: ${item.path} ---");
-        try {
-          final res = await Amplify.Storage.downloadData(
-            path: StoragePath.fromString(item.path),
-          ).result;
-          final bytes = res.bytes;
-          final hexBytes = bytes.sublist(0, min(32, bytes.length)).map((b) => b.toRadixString(16).padLeft(2, '0')).join(' ');
-          print("RAW ENCRYPTED BYTES (first 32): $hexBytes");
-          MyEncryptor.testDecrypt(Uint8List.fromList(bytes), item.path.split('/').last);
-        } catch (e) {
-          print("Lỗi khi tải/test file cũ: $e");
-        }
-      }
     } catch (e) {
       print("Lỗi khi tải danh sách tệp S3: $e");
       setState(() => _isLoading = false);
@@ -858,9 +612,7 @@ class _EncryptedThumbnailState extends State<EncryptedThumbnail> {
 
       final encryptedBytes = result.bytes;
       print("Đã tải: ${widget.storagePath}, độ dài: ${encryptedBytes.length} bytes");
-      
-      // Chạy thử nghiệm các cấu hình IV khác nhau để debug
-      MyEncryptor.testDecrypt(Uint8List.fromList(encryptedBytes), widget.storagePath.split('/').last);
+
 
       // Giải mã bằng Key từ PIN hiện tại
       final decryptedData = MyEncryptor.decryptData(encryptedBytes);
