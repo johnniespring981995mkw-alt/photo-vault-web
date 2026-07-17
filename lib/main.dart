@@ -635,6 +635,25 @@ class _SecureGalleryScreenState extends State<SecureGalleryScreen> {
         }
       }
 
+      // THỬ NGHIỆM RIÊNG CHO HAI FILE ĐỂ XÁC MINH CIPHERTEXT
+      print("--- XÁC MINH CIPHERTEXT CHO HAI FILE PHONE UPLOAD ---");
+      for (final targetPath in [
+        "thumb/ap-southeast-1:03602ffd-7b75-c609-7fc2-63e04f2e50fd/img_1766328410546_748685478.enc",
+        "thumb/ap-southeast-1:03602ffd-7b75-c609-7fc2-63e04f2e50fd/img_1784177790604_549506859.enc"
+      ]) {
+        try {
+          final res = await Amplify.Storage.downloadData(
+            path: StoragePath.fromString(targetPath),
+          ).result;
+          final bytes = res.bytes;
+          final hexBytes = bytes.sublist(0, min(32, bytes.length)).map((b) => b.toRadixString(16).padLeft(2, '0')).join(' ');
+          print("XÁC MINH: $targetPath -> $hexBytes");
+          MyEncryptor.testDecrypt(Uint8List.fromList(bytes), targetPath.split('/').last);
+        } catch (e) {
+          print("Không tải được file xác minh $targetPath: $e");
+        }
+      }
+
       // Chạy thử nghiệm giải mã tự động cho 3 file cũ từ năm 2025
       final oldItems = items.where((item) {
         final filename = item.path.split('/').last;
