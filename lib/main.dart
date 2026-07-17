@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 import 'dart:convert'; // Để xử lý utf8
 import 'dart:math'; // Để lấy lớp Random làm seed IV
+import 'dart:ui'; // Để dùng BackdropFilter/ImageFilter
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
@@ -452,6 +453,9 @@ class _SecureGalleryScreenState extends State<SecureGalleryScreen> {
   bool _isLoading = true;
   final ImagePicker _picker = ImagePicker();
   String? _userId;
+  bool _isUploading = false;
+  double _uploadProgress = 0.0;
+  String _uploadStatus = "";
 
   @override
   void initState() {
@@ -503,13 +507,20 @@ class _SecureGalleryScreenState extends State<SecureGalleryScreen> {
     final List<XFile> images = await _picker.pickMultiImage();
     if (images.isEmpty) return;
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Đang mã hóa và tải lên ${images.length} ảnh...')),
-    );
+    setState(() {
+      _isUploading = true;
+      _uploadProgress = 0.0;
+      _uploadStatus = "Đang bắt đầu tải lên ${images.length} ảnh...";
+    });
 
     int successCount = 0;
     for (int i = 0; i < images.length; i++) {
       final image = images[i];
+      setState(() {
+        _uploadProgress = i / images.length;
+        _uploadStatus = "Đang mã hóa & tải lên ảnh ${i + 1}/${images.length}...";
+      });
+
       try {
         final String fileId = '${DateTime.now().millisecondsSinceEpoch}_${image.name.hashCode}_$i';
         final String fileName = 'img_$fileId.enc';
@@ -547,7 +558,17 @@ class _SecureGalleryScreenState extends State<SecureGalleryScreen> {
       }
     }
 
+    setState(() {
+      _uploadProgress = 1.0;
+      _uploadStatus = "Đã hoàn thành! Đã tải lên $successCount/${images.length} ảnh.";
+    });
+
+    await Future.delayed(const Duration(milliseconds: 850));
+
     if (mounted) {
+      setState(() {
+        _isUploading = false;
+      });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Đã sao lưu an toàn $successCount/${images.length} ảnh!')),
       );
@@ -573,51 +594,94 @@ class _SecureGalleryScreenState extends State<SecureGalleryScreen> {
           ),
         ],
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : _thumbFiles.isEmpty
-              ? const Center(child: Text('Chưa có ảnh nào.'))
-              : GridView.builder(
-                  padding: const EdgeInsets.all(8),
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 3, crossAxisSpacing: 8, mainAxisSpacing: 8,
-                  ),
-                  itemCount: _thumbFiles.length,
-                  itemBuilder: (context, index) {
-                    final item = _thumbFiles[index];
-                    if (item.path.endsWith('/')) return const SizedBox.shrink();
-
-                    return GestureDetector(
-                      onTap: () {
-                        final fullPath = item.path.replaceFirst('thumb/', 'full/');
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => DecryptViewerScreen(
-                              fullPath: fullPath,
-                              date: item.lastModified,
-                            ),
-                          ),
-                        ).then((value) {
-                          if (value == true) {
-                            _fetchFiles();
-                          }
-                        });
-                      },
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(8),
-                        child: EncryptedThumbnail(storagePath: item.path),
+      body: Stack(
+        children: [
+          _isLoading
+              ? const Center(child: CircularProgressIndicator())
+              : _thumbFiles.isEmpty
+                  ? const Center(child: Text('Chưa có ảnh nào.'))
+                  : GridView.builder(
+                      padding: const EdgeInsets.all(8),
+                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: 3, crossAxisSpacing: 8, mainAxisSpacing: 8,
                       ),
-                    );
-                  },
+                      itemCount: _thumbFiles.length,
+                      itemBuilder: (context, index) {
+                        final item = _thumbFiles[index];
+                        if (item.path.endsWith('/')) return const SizedBox.shrink();
+
+                        return GestureDetector(
+                          onTap: () {
+                            final fullPath = item.path.replaceFirst('thumb/', 'full/');
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => DecryptViewerScreen(
+                                  fullPath: fullPath,
+                                  date: item.lastModified,
+                                ),
+                              ),
+                            ).then((value) {
+                              if (value == true) {
+                                _fetchFiles();
+                              }
+                            });
+                          },
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: EncryptedThumbnail(storagePath: item.path),
+                          ),
+                        );
+                      },
+                    ),
+          if (_isUploading)
+            Positioned.fill(
+              child: ClipRect(
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 5.0, sigmaY: 5.0),
+                  child: Container(
+                    color: Colors.black.withOpacity(0.55),
+                    child: Center(
+                      child: Card(
+                        margin: const EdgeInsets.symmetric(horizontal: 32),
+                        child: Padding(
+                          padding: const EdgeInsets.all(24),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const CircularProgressIndicator(color: Colors.teal),
+                              const SizedBox(height: 24),
+                              Text(
+                                _uploadStatus,
+                                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                                textAlign: TextAlign.center,
+                              ),
+                              const SizedBox(height: 16),
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(8),
+                                child: LinearProgressIndicator(
+                                  value: _uploadProgress,
+                                  minHeight: 8,
+                                  backgroundColor: Colors.grey.withOpacity(0.2),
+                                  valueColor: const AlwaysStoppedAnimation<Color>(Colors.teal),
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                '${(_uploadProgress * 100).toInt()}%',
+                                style: const TextStyle(color: Colors.grey, fontWeight: FontWeight.bold),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
                 ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _uploadEncryptedImage,
-        label: const Text('Thêm ảnh'),
-        icon: const Icon(Icons.add_a_photo),
+              ),
+            ),
+        ],
       ),
-    );
-  }
 }
 
 class EncryptedThumbnail extends StatefulWidget {
