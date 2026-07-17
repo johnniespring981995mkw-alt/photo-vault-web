@@ -804,3 +804,8 @@ class _DecryptViewerScreenState extends State<DecryptViewerScreen> {
     );
   }
 }
+
+// Ghi đè hàm print để ẩn toàn bộ log trong console theo yêu cầu
+void print(Object? object) {
+  // Không làm gì cả để loại bỏ toàn bộ console logs
+}
