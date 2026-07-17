@@ -612,13 +612,14 @@ class _SecureGalleryScreenState extends State<SecureGalleryScreen> {
 
                         return GestureDetector(
                           onTap: () {
-                            final fullPath = item.path.replaceFirst('thumb/', 'full/');
+                            final cleanFiles = _thumbFiles.where((f) => !f.path.endsWith('/')).toList();
+                            final itemIndex = cleanFiles.indexOf(item);
                             Navigator.push(
                               context,
                               MaterialPageRoute(
                                 builder: (context) => DecryptViewerScreen(
-                                  fullPath: fullPath,
-                                  date: item.lastModified,
+                                  allFiles: cleanFiles,
+                                  initialIndex: itemIndex,
                                 ),
                               ),
                             ).then((value) {
@@ -754,52 +755,35 @@ class _EncryptedThumbnailState extends State<EncryptedThumbnail> {
 }
 
 class DecryptViewerScreen extends StatefulWidget {
-  final String fullPath;
-  final DateTime? date;
-  const DecryptViewerScreen({super.key, required this.fullPath, this.date});
+  final List<StorageItem> allFiles;
+  final int initialIndex;
+  const DecryptViewerScreen({
+    super.key,
+    required this.allFiles,
+    required this.initialIndex,
+  });
 
   @override
   State<DecryptViewerScreen> createState() => _DecryptViewerScreenState();
 }
 
 class _DecryptViewerScreenState extends State<DecryptViewerScreen> {
-  Uint8List? _fullImageBytes;
-  bool _loading = true;
-  String? _error;
+  late PageController _pageController;
+  late int _currentIndex;
+  final Map<int, Uint8List> _loadedBytesMap = {};
+  bool _isDeleting = false;
 
   @override
   void initState() {
     super.initState();
-    _loadFullImage();
+    _currentIndex = widget.initialIndex;
+    _pageController = PageController(initialPage: widget.initialIndex);
   }
 
-  Future<void> _loadFullImage() async {
-    try {
-      final result = await Amplify.Storage.downloadData(
-        path: StoragePath.fromString(widget.fullPath),
-      ).result;
-
-      final encryptedBytes = result.bytes;
-      print("Đã tải ảnh gốc: ${widget.fullPath}, độ dài: ${encryptedBytes.length} bytes");
-      // Giải mã bằng Key từ PIN
-      final decryptedData = MyEncryptor.decryptData(encryptedBytes);
-      print("Giải mã ảnh gốc xong: ${widget.fullPath}, độ dài: ${decryptedData.length} bytes");
-
-      if (mounted) {
-        setState(() {
-          _fullImageBytes = Uint8List.fromList(decryptedData);
-          _loading = false;
-        });
-      }
-    } catch (e) {
-      print("Giải mã ảnh gốc thất bại (${widget.fullPath}): $e");
-      if (mounted) {
-        setState(() {
-          _loading = false;
-          _error = "Không thể giải mã! Có thể bạn đã nhập sai mã PIN so với lúc upload. Chi tiết: $e";
-        });
-      }
-    }
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
   }
 
   Future<void> _confirmDelete(BuildContext context) async {
@@ -818,35 +802,53 @@ class _DecryptViewerScreenState extends State<DecryptViewerScreen> {
   }
 
   Future<void> _deleteFiles(BuildContext context) async {
+    if (_isDeleting) return;
+    setState(() => _isDeleting = true);
+    
     try {
-      showDialog(context: context, barrierDismissible: false, builder: (_) => const Center(child: CircularProgressIndicator()));
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => const Center(child: CircularProgressIndicator(color: Colors.white)),
+      );
       
-      await Amplify.Storage.remove(path: StoragePath.fromString(widget.fullPath)).result;
-      final thumbPath = widget.fullPath.replaceFirst('full/', 'thumb/');
-      try {
-        await Amplify.Storage.remove(path: StoragePath.fromString(thumbPath)).result;
-      } catch (_) {}
+      final currentItem = widget.allFiles[_currentIndex];
+      final fullPath = currentItem.path.replaceFirst('thumb/', 'full/');
+      
+      await Amplify.Storage.remove(path: StoragePath.fromString(fullPath)).result;
+      await Amplify.Storage.remove(path: StoragePath.fromString(currentItem.path)).result;
 
-      if(mounted) {
+      if (mounted) {
         Navigator.pop(context); // Đóng Loading Dialog
-        Navigator.pop(context, true); // Đóng DecryptViewerScreen và trả về true
+        Navigator.pop(context, true); // Đóng viewer và báo về gallery để fetch lại
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Đã xóa.')));
       }
     } catch (e) {
-      if(mounted) Navigator.pop(context);
+      if (mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi xóa: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _isDeleting = false);
     }
   }
 
   Future<void> _saveToGallery() async {
-    if (_fullImageBytes == null) return;
+    final activeBytes = _loadedBytesMap[_currentIndex];
+    if (activeBytes == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Vui lòng đợi ảnh tải xong')),
+      );
+      return;
+    }
+    
     try {
       final String fileId = '${DateTime.now().millisecondsSinceEpoch}';
       final String fileName = 'img_$fileId.jpg';
       
-      // Gọi helper đa nền tảng hỗ trợ tải xuống
-      await saveImage(_fullImageBytes!, fileName);
+      await saveImage(activeBytes, fileName);
       
-      if(mounted) {
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Đã lưu ảnh về máy!')),
         );
@@ -862,44 +864,169 @@ class _DecryptViewerScreenState extends State<DecryptViewerScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (widget.allFiles.isEmpty) {
+      return const Scaffold(
+        backgroundColor: Colors.black,
+        body: Center(child: Text('Không có ảnh nào', style: TextStyle(color: Colors.white))),
+      );
+    }
+
+    final currentItem = widget.allFiles[_currentIndex];
+    final formattedDate = currentItem.lastModified != null 
+        ? DateFormat('dd/MM/yyyy HH:mm').format(currentItem.lastModified!.toLocal())
+        : '';
+
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         iconTheme: const IconThemeData(color: Colors.white),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Ảnh ${_currentIndex + 1} / ${widget.allFiles.length}',
+              style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+            ),
+            if (formattedDate.isNotEmpty)
+              Text(
+                formattedDate,
+                style: const TextStyle(color: Colors.grey, fontSize: 12),
+              ),
+          ],
+        ),
         actions: [
           IconButton(icon: const Icon(Icons.delete), onPressed: () => _confirmDelete(context)),
           IconButton(icon: const Icon(Icons.download), onPressed: _saveToGallery),
         ],
       ),
-      body: Center(
-        child: _loading
-            ? const CircularProgressIndicator(color: Colors.white)
-            : _error != null 
-                ? Padding(padding: const EdgeInsets.all(20), child: Text(_error!, style: const TextStyle(color: Colors.red), textAlign: TextAlign.center))
-                : _fullImageBytes != null 
-                  ? InteractiveViewer(
-                      child: Image.memory(
-                        _fullImageBytes!,
-                        errorBuilder: (context, error, stackTrace) {
-                          return const Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(Icons.lock, color: Colors.red, size: 64),
-                              SizedBox(height: 16),
-                              Text(
-                                "Không thể giải mã hình ảnh này!\nCó thể bạn đã nhập sai mã PIN so với lúc mã hóa tệp tin.",
-                                style: TextStyle(color: Colors.red, fontSize: 16),
-                                textAlign: TextAlign.center,
-                              ),
-                            ],
-                          );
-                        },
-                      ),
-                    )
-                  : const SizedBox(),
+      body: PageView.builder(
+        controller: _pageController,
+        itemCount: widget.allFiles.length,
+        onPageChanged: (index) {
+          setState(() {
+            _currentIndex = index;
+          });
+        },
+        itemBuilder: (context, index) {
+          final fileItem = widget.allFiles[index];
+          final fullPath = fileItem.path.replaceFirst('thumb/', 'full/');
+          return DecryptImagePage(
+            key: ValueKey(fullPath),
+            fullPath: fullPath,
+            index: index,
+            onLoaded: (bytes) {
+              _loadedBytesMap[index] = bytes;
+            },
+            onDisposed: () {
+              _loadedBytesMap.remove(index);
+            },
+          );
+        },
       ),
     );
+  }
+}
+
+class DecryptImagePage extends StatefulWidget {
+  final String fullPath;
+  final int index;
+  final ValueChanged<Uint8List> onLoaded;
+  final VoidCallback onDisposed;
+  const DecryptImagePage({
+    super.key,
+    required this.fullPath,
+    required this.index,
+    required this.onLoaded,
+    required this.onDisposed,
+  });
+
+  @override
+  State<DecryptImagePage> createState() => _DecryptImagePageState();
+}
+
+class _DecryptImagePageState extends State<DecryptImagePage> {
+  Uint8List? _fullImageBytes;
+  bool _loading = true;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadFullImage();
+  }
+
+  @override
+  void dispose() {
+    widget.onDisposed();
+    super.dispose();
+  }
+
+  Future<void> _loadFullImage() async {
+    try {
+      final result = await Amplify.Storage.downloadData(
+        path: StoragePath.fromString(widget.fullPath),
+      ).result;
+
+      final encryptedBytes = result.bytes;
+      final decryptedData = MyEncryptor.decryptData(encryptedBytes);
+
+      if (mounted) {
+        setState(() {
+          _fullImageBytes = Uint8List.fromList(decryptedData);
+          _loading = false;
+        });
+        widget.onLoaded(_fullImageBytes!);
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _error = "Không thể giải mã! Chi tiết: $e";
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_loading) {
+      return const Center(child: CircularProgressIndicator(color: Colors.white));
+    }
+    if (_error != null) {
+      return Padding(
+        padding: const EdgeInsets.all(20),
+        child: Center(
+          child: Text(
+            _error!,
+            style: const TextStyle(color: Colors.red),
+            textAlign: TextAlign.center,
+          ),
+        ),
+      );
+    }
+    if (_fullImageBytes != null) {
+      return InteractiveViewer(
+        child: Image.memory(
+          _fullImageBytes!,
+          errorBuilder: (context, error, stackTrace) {
+            return const Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.lock, color: Colors.red, size: 64),
+                SizedBox(height: 16),
+                Text(
+                  "Không thể giải mã hình ảnh này!\nCó thể bạn đã nhập sai mã PIN so với lúc mã hóa tệp tin.",
+                  style: TextStyle(color: Colors.red, fontSize: 16),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            );
+          },
+        ),
+      );
+    }
+    return const SizedBox();
   }
 }
 
