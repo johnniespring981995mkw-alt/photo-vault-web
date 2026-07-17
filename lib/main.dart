@@ -161,12 +161,27 @@ class _MyAppState extends State<MyApp> {
         debugShowCheckedModeBanner: false,
         theme: ThemeData(
           useMaterial3: true,
-          colorScheme: ColorScheme.fromSeed(seedColor: Colors.teal),
+          colorScheme: ColorScheme.fromSeed(
+            seedColor: Colors.teal,
+            brightness: Brightness.light,
+          ),
           appBarTheme: const AppBarTheme(
             backgroundColor: Colors.teal,
             foregroundColor: Colors.white,
           ),
         ),
+        darkTheme: ThemeData(
+          useMaterial3: true,
+          colorScheme: ColorScheme.fromSeed(
+            seedColor: Colors.teal,
+            brightness: Brightness.dark,
+          ),
+          appBarTheme: const AppBarTheme(
+            backgroundColor: Color(0xFF004D40), // Deep teal background in dark mode
+            foregroundColor: Colors.white,
+          ),
+        ),
+        themeMode: ThemeMode.system, // Tự động đổi Light/Dark Mode theo hệ thống
         builder: Authenticator.builder(),
         // Sau khi đăng nhập AWS xong -> Vào màn hình nhập PIN
         home: _isAmplifyConfigured
@@ -223,67 +238,79 @@ class _CustomChangePasswordScreenState extends State<CustomChangePasswordScreen>
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     return Scaffold(
-      backgroundColor: Colors.teal,
-      body: Center(
-        child: Card(
-          margin: const EdgeInsets.all(24),
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.lock_reset, size: 64, color: Colors.teal),
-                const SizedBox(height: 16),
-                const Text(
-                  "Cần Đổi Mật Khẩu",
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 8),
-                const Text(
-                  "Đây là lần đăng nhập đầu tiên.\nVui lòng thiết lập mật khẩu mới.",
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: Colors.grey),
-                ),
-                const SizedBox(height: 24),
-                TextField(
-                  controller: _passwordController,
-                  obscureText: true,
-                  decoration: const InputDecoration(
-                    labelText: "Mật khẩu mới",
-                    border: OutlineInputBorder(),
-                    prefixIcon: Icon(Icons.lock),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: _confirmController,
-                  obscureText: true,
-                  decoration: const InputDecoration(
-                    labelText: "Xác nhận mật khẩu",
-                    border: OutlineInputBorder(),
-                    prefixIcon: Icon(Icons.lock_outline),
-                  ),
-                ),
-                if (_error != null) ...[
-                  const SizedBox(height: 16),
-                  Text(_error!, style: const TextStyle(color: Colors.red)),
-                ],
-                const SizedBox(height: 24),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: _isLoading ? null : _submitNewPassword,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.teal,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 16),
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: isDark
+                ? [const Color(0xFF0F2027), const Color(0xFF203A43), const Color(0xFF2C5364)] // Sleek slate dark gradient
+                : [const Color(0xFFE0F2F1), const Color(0xFF80CBC4), const Color(0xFF4DB6AC)], // Fresh teal light gradient
+          ),
+        ),
+        child: Center(
+          child: SingleChildScrollView(
+            child: Card(
+              margin: const EdgeInsets.all(24),
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.lock_reset, size: 64, color: theme.colorScheme.primary),
+                    const SizedBox(height: 16),
+                    const Text(
+                      "Cần Đổi Mật Khẩu",
+                      style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                     ),
-                    child: _isLoading
-                        ? const CircularProgressIndicator(color: Colors.white)
-                        : const Text("XÁC NHẬN ĐỔI MẬT KHẨU"),
-                  ),
-                ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      "Đây là lần đăng nhập đầu tiên.\nVui lòng thiết lập mật khẩu mới.",
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: Colors.grey),
+                    ),
+                    const SizedBox(height: 24),
+                    TextField(
+                      controller: _passwordController,
+                      obscureText: true,
+                      decoration: const InputDecoration(
+                        labelText: "Mật khẩu mới",
+                        border: OutlineInputBorder(),
+                        prefixIcon: Icon(Icons.lock),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: _confirmController,
+                      obscureText: true,
+                      decoration: const InputDecoration(
+                        labelText: "Xác nhận mật khẩu",
+                        border: OutlineInputBorder(),
+                        prefixIcon: Icon(Icons.lock_outline),
+                      ),
+                    ),
+                    if (_error != null) ...[
+                      const SizedBox(height: 16),
+                      Text(_error!, style: const TextStyle(color: Colors.red)),
+                    ],
+                    const SizedBox(height: 24),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: _isLoading ? null : _submitNewPassword,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: theme.colorScheme.primary,
+                          foregroundColor: theme.colorScheme.onPrimary,
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                        ),
+                        child: _isLoading
+                            ? CircularProgressIndicator(color: theme.colorScheme.onPrimary)
+                            : const Text("XÁC NHẬN ĐỔI MẬT KHẨU"),
+                      ),
+                    ),
                 TextButton(
                   onPressed: () => Amplify.Auth.signOut(), // Cho phép hủy để đăng nhập lại user khác
                   child: const Text("Quay lại đăng nhập"),
@@ -334,59 +361,73 @@ class _PinLoginScreenState extends State<PinLoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     return Scaffold(
-      backgroundColor: Colors.teal,
-      body: Center(
-        child: Card(
-          margin: const EdgeInsets.all(24),
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.lock_outline, size: 64, color: Colors.teal),
-                const SizedBox(height: 16),
-                const Text(
-                  "Nhập Mã PIN Bảo Mật",
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 8),
-                const Text(
-                  "Mã PIN này dùng để mã hóa ảnh của bạn.\nHãy ghi nhớ nó kỹ!",
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: Colors.grey),
-                ),
-                const SizedBox(height: 24),
-                TextField(
-                  controller: _pinController,
-                  obscureText: true,
-                  keyboardType: TextInputType.number,
-                  decoration: InputDecoration(
-                    labelText: "Mã PIN",
-                    border: const OutlineInputBorder(),
-                    errorText: _error,
-                    prefixIcon: const Icon(Icons.key),
-                  ),
-                ),
-                const SizedBox(height: 24),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: _submitPin,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.teal,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 16),
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: isDark
+                ? [const Color(0xFF0F2027), const Color(0xFF203A43), const Color(0xFF2C5364)] // Slate dark gradient
+                : [const Color(0xFFE0F2F1), const Color(0xFF80CBC4), const Color(0xFF4DB6AC)], // Teal light gradient
+          ),
+        ),
+        child: Center(
+          child: SingleChildScrollView(
+            child: Card(
+              margin: const EdgeInsets.all(24),
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.lock_outline, size: 64, color: theme.colorScheme.primary),
+                    const SizedBox(height: 16),
+                    const Text(
+                      "Nhập Mã PIN Bảo Mật",
+                      style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                     ),
-                    child: const Text("MỞ KHO ẢNH"),
-                  ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      "Mã PIN này dùng để mã hóa ảnh của bạn.\nHãy ghi nhớ nó kỹ!",
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: Colors.grey),
+                    ),
+                    const SizedBox(height: 24),
+                    TextField(
+                      controller: _pinController,
+                      obscureText: true,
+                      keyboardType: TextInputType.number,
+                      decoration: InputDecoration(
+                        labelText: "Mã PIN",
+                        border: const OutlineInputBorder(),
+                        errorText: _error,
+                        prefixIcon: const Icon(Icons.key),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: _submitPin,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: theme.colorScheme.primary,
+                          foregroundColor: theme.colorScheme.onPrimary,
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                        ),
+                        child: const Text("MỞ KHO ẢNH"),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    TextButton(
+                      onPressed: () => Amplify.Auth.signOut(),
+                      child: const Text("Đăng xuất tài khoản AWS"),
+                    )
+                  ],
                 ),
-                const SizedBox(height: 16),
-                TextButton(
-                  onPressed: () => Amplify.Auth.signOut(),
-                  child: const Text("Đăng xuất tài khoản AWS"),
-                )
-              ],
+              ),
             ),
           ),
         ),
