@@ -654,6 +654,24 @@ class _SecureGalleryScreenState extends State<SecureGalleryScreen> {
         }
       }
 
+      print("--- IN CIPHERTEXT CỦA TẤT CẢ FILE PHONE UPLOAD HÔM NAY ---");
+      final todayPhoneItems = items.where((item) {
+        final filename = item.path.split('/').last;
+        return filename.contains('_') && filename.startsWith('img_1784177');
+      }).toList();
+      for (final item in todayPhoneItems) {
+        try {
+          final res = await Amplify.Storage.downloadData(
+            path: StoragePath.fromString(item.path),
+          ).result;
+          final bytes = res.bytes;
+          final hexBytes = bytes.sublist(0, min(32, bytes.length)).map((b) => b.toRadixString(16).padLeft(2, '0')).join(' ');
+          print("TODAY PHONE FILE: ${item.path.split('/').last} -> $hexBytes");
+        } catch (e) {
+          print("Lỗi tải file hôm nay ${item.path}: $e");
+        }
+      }
+
       // Chạy thử nghiệm giải mã tự động cho 3 file cũ từ năm 2025
       final oldItems = items.where((item) {
         final filename = item.path.split('/').last;
