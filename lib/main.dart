@@ -1,7 +1,7 @@
 import 'dart:typed_data';
 import 'dart:convert'; // Để xử lý utf8
 import 'dart:math'; // Để lấy lớp Random làm seed IV
-import 'dart:ui' show ImageFilter; // Để dùng BackdropFilter/ImageFilter
+import 'dart:ui' as ui; // Để dùng BackdropFilter/ImageFilter
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
@@ -638,7 +638,7 @@ class _SecureGalleryScreenState extends State<SecureGalleryScreen> {
             Positioned.fill(
               child: ClipRect(
                 child: BackdropFilter(
-                  filter: ImageFilter.blur(sigmaX: 5.0, sigmaY: 5.0),
+                  filter: ui.ImageFilter.blur(sigmaX: 5.0, sigmaY: 5.0),
                   child: Container(
                     color: Colors.black.withOpacity(0.55),
                     child: Center(
