@@ -682,7 +682,13 @@ class _SecureGalleryScreenState extends State<SecureGalleryScreen> {
             ),
         ],
       ),
-}
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _uploadEncryptedImage,
+        label: const Text('Thêm ảnh'),
+        icon: const Icon(Icons.add_a_photo),
+      ),
+    );
+  }
 
 class EncryptedThumbnail extends StatefulWidget {
   final String storagePath;
