@@ -617,10 +617,27 @@ class _SecureGalleryScreenState extends State<SecureGalleryScreen> {
         _isLoading = false;
       });
 
-      // Chạy thử nghiệm giải mã tự động cho 3 file cũ nhất/cũ từ năm 2025
+      // Chạy thử nghiệm giải mã tự động cho 3 file mới nhất (bao gồm cả phone upload hôm nay)
+      print("TÌM THẤY ${items.length} FILE ĐỂ CHẠY THỬ NGHIỆM FILE MỚI NHẤT:");
+      for (int i = 0; i < items.length && i < 3; i++) {
+        final item = items[i];
+        print("--- THỬ NGHIỆM TỰ ĐỘNG CHO FILE MỚI NHẤT: ${item.path} ---");
+        try {
+          final res = await Amplify.Storage.downloadData(
+            path: StoragePath.fromString(item.path),
+          ).result;
+          final bytes = res.bytes;
+          final hexBytes = bytes.sublist(0, min(32, bytes.length)).map((b) => b.toRadixString(16).padLeft(2, '0')).join(' ');
+          print("RAW ENCRYPTED BYTES (first 32): $hexBytes");
+          MyEncryptor.testDecrypt(Uint8List.fromList(bytes), item.path.split('/').last);
+        } catch (e) {
+          print("Lỗi khi tải/test file mới: $e");
+        }
+      }
+
+      // Chạy thử nghiệm giải mã tự động cho 3 file cũ từ năm 2025
       final oldItems = items.where((item) {
         final filename = item.path.split('/').last;
-        // Các file cũ từ Dec 2025 bắt đầu bằng img_1766
         return filename.contains('_') && filename.startsWith('img_1766');
       }).toList();
 
