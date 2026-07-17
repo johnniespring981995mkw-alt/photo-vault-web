@@ -500,75 +500,58 @@ class _SecureGalleryScreenState extends State<SecureGalleryScreen> {
 
   Future<void> _uploadEncryptedImage() async {
     if (_userId == null) return;
-    final XFile? image = await _picker.pickImage(source: ImageSource.gallery);
-    if (image == null) return;
+    final List<XFile> images = await _picker.pickMultiImage();
+    if (images.isEmpty) return;
 
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Đang mã hóa và upload...')),
+      SnackBar(content: Text('Đang mã hóa và tải lên ${images.length} ảnh...')),
     );
 
-    try {
-      final String fileId = '${DateTime.now().millisecondsSinceEpoch}';
-      final String fileName = 'img_$fileId.enc';
-
-      // 1. Mã hóa & Upload Full (Sử dụng key từ PIN và lưu trữ trực tiếp bằng Bytes)
-      final originalBytes = await image.readAsBytes();
-      print("UPLOADING: originalBytes = ${originalBytes.length} bytes");
-      final encryptedFullBytes = MyEncryptor.encryptData(originalBytes);
-      print("UPLOADING: encryptedFullBytes = ${encryptedFullBytes.length} bytes");
-      
-      await Amplify.Storage.uploadData(
-        data: StorageDataPayload.bytes(encryptedFullBytes),
-        path: StoragePath.fromString('full/$_userId/$fileName'),
-      ).result;
-
-      // 2. Mã hóa & Upload Thumb (Sử dụng thư viện 'image' thuần Dart)
-      final decodedImage = img.decodeImage(originalBytes);
-      List<int> compressedBytes;
-      if (decodedImage != null) {
-        // Tạo ảnh thumbnail hình vuông 200x200 bằng cách resize và crop để giữ nguyên tỷ lệ (aspect ratio) không bị méo ảnh
-        final thumbnail = img.copyResizeCropSquare(decodedImage, size: 200);
-        compressedBytes = img.encodeJpg(thumbnail, quality: 50);
-      } else {
-        compressedBytes = originalBytes;
-      }
-      print("UPLOADING: compressedBytes = ${compressedBytes.length} bytes");
-      
-      final encryptedThumbBytes = MyEncryptor.encryptData(compressedBytes);
-      print("UPLOADING: encryptedThumbBytes = ${encryptedThumbBytes.length} bytes");
-
-      // TEST GIẢI MÃ THỬ TRONG BỘ NHỚ NGAY LẬP TỨC
+    int successCount = 0;
+    for (int i = 0; i < images.length; i++) {
+      final image = images[i];
       try {
-        final testDecrypted = MyEncryptor.decryptData(encryptedThumbBytes);
-        print("TEST TRONG BỘ NHỚ: Giải mã thành công, độ dài = ${testDecrypted.length} bytes");
-        bool isMatch = true;
-        if (compressedBytes.length != testDecrypted.length) {
-          isMatch = false;
-        } else {
-          for (int i = 0; i < compressedBytes.length; i++) {
-            if (compressedBytes[i] != testDecrypted[i]) {
-              isMatch = false;
-              break;
-            }
-          }
-        }
-        print("TEST TRONG BỘ NHỚ: Kết quả khớp hoàn toàn = $isMatch");
-      } catch (testError) {
-        print("TEST TRONG BỘ NHỚ: Thất bại với lỗi = $testError");
-      }
-      
-      await Amplify.Storage.uploadData(
-        data: StorageDataPayload.bytes(encryptedThumbBytes),
-        path: StoragePath.fromString('thumb/$_userId/$fileName'),
-      ).result;
+        final String fileId = '${DateTime.now().millisecondsSinceEpoch}_${image.name.hashCode}_$i';
+        final String fileName = 'img_$fileId.enc';
 
+        // 1. Mã hóa & Upload Full (Sử dụng key từ PIN và lưu trữ trực tiếp bằng Bytes)
+        final originalBytes = await image.readAsBytes();
+        final encryptedFullBytes = MyEncryptor.encryptData(originalBytes);
+        
+        await Amplify.Storage.uploadData(
+          data: StorageDataPayload.bytes(encryptedFullBytes),
+          path: StoragePath.fromString('full/$_userId/$fileName'),
+        ).result;
+
+        // 2. Mã hóa & Upload Thumb (Sử dụng thư viện 'image' thuần Dart)
+        final decodedImage = img.decodeImage(originalBytes);
+        List<int> compressedBytes;
+        if (decodedImage != null) {
+          // Tạo ảnh thumbnail hình vuông 200x200 bằng cách resize và crop để giữ nguyên tỷ lệ (aspect ratio) không bị méo ảnh
+          final thumbnail = img.copyResizeCropSquare(decodedImage, size: 200);
+          compressedBytes = img.encodeJpg(thumbnail, quality: 50);
+        } else {
+          compressedBytes = originalBytes;
+        }
+        
+        final encryptedThumbBytes = MyEncryptor.encryptData(compressedBytes);
+        
+        await Amplify.Storage.uploadData(
+          data: StorageDataPayload.bytes(encryptedThumbBytes),
+          path: StoragePath.fromString('thumb/$_userId/$fileName'),
+        ).result;
+
+        successCount++;
+      } catch (e) {
+        print('Lỗi upload file ${image.name}: $e');
+      }
+    }
+
+    if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Đã sao lưu an toàn!')),
+        SnackBar(content: Text('Đã sao lưu an toàn $successCount/${images.length} ảnh!')),
       );
       _fetchFiles();
-    } catch (e) {
-      print('Lỗi upload: $e');
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
     }
   }
 
