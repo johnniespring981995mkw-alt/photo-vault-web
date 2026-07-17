@@ -687,6 +687,7 @@ class _SecureGalleryScreenState extends State<SecureGalleryScreen> {
       ),
     );
   }
+}
 
 class EncryptedThumbnail extends StatefulWidget {
   final String storagePath;
