@@ -649,7 +649,7 @@ class _SecureGalleryScreenState extends State<SecureGalleryScreen> {
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              const CircularProgressIndicator(color: Colors.teal),
+                              const CircularProgressIndicator(),
                               const SizedBox(height: 24),
                               Text(
                                 _uploadStatus,
@@ -662,8 +662,6 @@ class _SecureGalleryScreenState extends State<SecureGalleryScreen> {
                                 child: LinearProgressIndicator(
                                   value: _uploadProgress,
                                   minHeight: 8,
-                                  backgroundColor: Colors.grey.withOpacity(0.2),
-                                  valueColor: const AlwaysStoppedAnimation<Color>(Colors.teal),
                                 ),
                               ),
                               const SizedBox(height: 8),
