@@ -1,7 +1,7 @@
 import 'dart:typed_data';
 import 'dart:convert'; // Để xử lý utf8
 import 'dart:math'; // Để lấy lớp Random làm seed IV
-import 'dart:ui'; // Để dùng BackdropFilter/ImageFilter
+import 'dart:ui' show ImageFilter; // Để dùng BackdropFilter/ImageFilter
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
