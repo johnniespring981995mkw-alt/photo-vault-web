@@ -311,11 +311,14 @@ class _CustomChangePasswordScreenState extends State<CustomChangePasswordScreen>
                             : const Text("XÁC NHẬN ĐỔI MẬT KHẨU"),
                       ),
                     ),
-                TextButton(
-                  onPressed: () => Amplify.Auth.signOut(), // Cho phép hủy để đăng nhập lại user khác
-                  child: const Text("Quay lại đăng nhập"),
-                )
-              ],
+                    const SizedBox(height: 16),
+                    TextButton(
+                      onPressed: () => Amplify.Auth.signOut(), // Cho phép hủy để đăng nhập lại user khác
+                      child: const Text("Quay lại đăng nhập"),
+                    )
+                  ],
+                ),
+              ),
             ),
           ),
         ),
