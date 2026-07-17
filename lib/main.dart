@@ -569,7 +569,11 @@ class _SecureGalleryScreenState extends State<SecureGalleryScreen> {
                               date: item.lastModified,
                             ),
                           ),
-                        );
+                        ).then((value) {
+                          if (value == true) {
+                            _fetchFiles();
+                          }
+                        });
                       },
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(8),
@@ -726,8 +730,8 @@ class _DecryptViewerScreenState extends State<DecryptViewerScreen> {
       } catch (_) {}
 
       if(mounted) {
-        Navigator.pop(context);
-        Navigator.pop(context);
+        Navigator.pop(context); // Đóng Loading Dialog
+        Navigator.pop(context, true); // Đóng DecryptViewerScreen và trả về true
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Đã xóa.')));
       }
     } catch (e) {
